@@ -1,0 +1,14 @@
+{
+  "PRD-445": {
+    "stock_quantity": 50
+  },
+  "PRD-999": {
+    "stock_quantity": 5
+  },
+  "PRD-101": {
+    "stock_quantity": 250
+  },
+  "PRD-000": {
+    "stock_quantity": 0
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "PRD-445": {
+    "base_price": 20000.0,
+    "cost_price": 16000.0
+  },
+  "PRD-999": {
+    "base_price": 5000.0,
+    "cost_price": 4500.0
+  },
+  "PRD-101": {
+    "base_price": 1200.0,
+    "cost_price": 800.0
+  },
+  "PRD-000": {
+    "base_price": 3500.0,
+    "cost_price": 2800.0
+  }
+}

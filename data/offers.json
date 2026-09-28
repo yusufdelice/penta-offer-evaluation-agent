@@ -1,0 +1,24 @@
+[
+  {
+    "offer_id": "OFF-10023",
+    "customer": {
+      "name": "ABC Teknoloji",
+      "segment": "strategic_partner"
+    },
+    "product_id": "PRD-445",
+    "quantity": 8,
+    "requested_discount": 12,
+    "offer_total": 125000
+  },
+  {
+    "offer_id": "OFF-20001",
+    "customer": {
+      "name": "Yeni Müşteri A.Ş.",
+      "segment": "standard"
+    },
+    "product_id": "PRD-101",
+    "quantity": 2,
+    "requested_discount": 5,
+    "offer_total": 2280
+  }
+]
