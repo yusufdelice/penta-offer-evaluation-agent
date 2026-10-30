@@ -19,7 +19,7 @@ logger = logging.getLogger("offer_agent")
 
 @dataclass
 class AgentContext:
-    """PII içermeyen asgari teklif bağlamı."""
+    """Zero-PII minimal quotation context passed to the AI layer."""
     offer_id: str
     requested_discount: float
     offer_total: float
@@ -29,7 +29,7 @@ class AgentContext:
 
 
 class AISummaryOutput(BaseModel):
-    """LLM çıktı doğrulama modeli."""
+    """Pydantic contract schema for LLM structured output validation."""
     ai_summary: str
     approval_message_draft: Optional[str] = None
 
@@ -41,13 +41,13 @@ erp = ERPClient()
 @tool
 def get_crm_offer_details(offer_id: str) -> str:
     """
-    Teklifin CRM sistemindeki kayıtlı bilgilerini getirir.
-    Kişisel verilerin korunması (PII) gereği müşteri adı maskelenerek döner.
+    Fetches registered offer records from the CRM system.
+    Customer name is masked strictly in compliance with data privacy (PII) principles.
     """
     try:
         offer = crm.get_offer(offer_id)
         if not offer:
-            return json.dumps({"error": "Teklif CRM sisteminde bulunamadı."})
+            return json.dumps({"error": "Offer not found in CRM system."})
 
         customer = offer.get("customer", {})
         masked_name = mask_name(customer.get("name", ""))
@@ -65,12 +65,12 @@ def get_crm_offer_details(offer_id: str) -> str:
 @tool
 def get_erp_product_details(product_id: str, requested_discount: float = 0.0) -> str:
     """
-    Ürünün ERP sistemindeki güncel stok miktarını ve talep edilen indirime göre kar marjını getirir.
+    Fetches real-time inventory quantity and calculated profit margin for a product from the ERP system.
     """
     try:
         data = erp.get_product_data(product_id, requested_discount)
         if not data.get("exists"):
-            return json.dumps({"error": "Ürün ERP sisteminde bulunamadı."})
+            return json.dumps({"error": "Product not found in ERP system."})
         return json.dumps({
             "product_id": product_id,
             "stock_quantity": data["stock_quantity"],
@@ -85,9 +85,9 @@ tools = [get_crm_offer_details, get_erp_product_details]
 
 class OfferAgent:
     """
-    Yapay Zekâ Karar Destek Ajanı.
-    - Mock mod: CRM ve ERP araçlarını (Tool Calling) bizzat çalıştırarak dinamik ve bağlamsal özet üretir.
-    - Groq mod: LangChain create_tool_calling_agent ile LLM tabanlı araç çağırma zincirini işletir.
+    AI Decision Support Agent.
+    - Mock mode: Directly executes CRM and ERP tool functions to produce dynamic, contextual summaries locally.
+    - Groq mode: Executes autonomous tool calling chain via LangChain create_tool_calling_agent.
     """
 
     def __init__(self, llm=None):
@@ -96,7 +96,7 @@ class OfferAgent:
         self._built = False
 
     def _build(self):
-        """Ajan bileşenlerini ilk çağrıda başlatır (lazy init)."""
+        """Initializes agent components on first call (lazy initialization)."""
         if self._injected_llm:
             agent = create_tool_calling_agent(self._injected_llm, tools, TOOL_CALLING_PROMPT)
             self._agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=False)
@@ -119,7 +119,7 @@ class OfferAgent:
         decision_result: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Deterministik karar çıktısına dayalı özet ve onay taslağı üretir.
+        Generates an executive summary and conditional approval draft based on deterministic engine results.
         """
         if not self._built:
             self._build()
@@ -127,11 +127,11 @@ class OfferAgent:
         decision = decision_result["decision"]
         reason_codes_str = ", ".join(decision_result["reason_codes"])
 
-        # 1. Varsayılan (Mock) Mod: Araçları (Tool Calling) doğrudan çalıştırarak zengin özet üret
+        # 1. Default (Mock) Mode: Directly invoke tools to generate rich contextual summary
         if not self._agent_executor:
             return self._generate_mock_tool_summary(context, decision_result)
 
-        # 2. Gerçek LLM (Groq) Modu
+        # 2. Live LLM (Groq) Mode
         try:
             response = self._agent_executor.invoke({
                 "offer_id": context.offer_id,
@@ -152,12 +152,12 @@ class OfferAgent:
             validated = AISummaryOutput(**raw_output)
             result = validated.model_dump()
 
-            # Guardrail: APPROVE / REJECT kararlarında onay taslağı üretilemez
+            # Guardrail: Never generate approval drafts for APPROVE or REJECT decisions
             if decision != "NEED_APPROVAL":
                 result["approval_message_draft"] = None
             elif not result.get("approval_message_draft"):
                 result["approval_message_draft"] = (
-                    f"{context.offer_id} teklifi {reason_codes_str} gerekçesiyle onayınıza sunulmuştur."
+                    f"Offer {context.offer_id} submitted for managerial approval due to: {reason_codes_str}."
                 )
 
             result["ai_source"] = "llm"
@@ -177,21 +177,21 @@ class OfferAgent:
         decision_result: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
-        Mock modda da CRM ve ERP araçlarını (Tool Calling) bizzat çalıştırarak
-        gerçek veriye dayalı dinamik özet üreten mekanizma.
+        Mock mode summary generator that executes CRM and ERP tools directly,
+        synthesizing realistic summaries from live data without internet dependencies.
         """
         decision = decision_result["decision"]
         reason_codes_str = ", ".join(decision_result["reason_codes"])
         customer_segment = decision_result["details"]["customer_segment"]
 
-        # Tool 1: CRM Aracını çalıştır
+        # Tool 1: Execute CRM Tool
         try:
             crm_raw = get_crm_offer_details.invoke({"offer_id": context.offer_id})
             crm_data = json.loads(crm_raw)
         except Exception:
             crm_data = {}
 
-        # Tool 2: ERP Aracını çalıştır
+        # Tool 2: Execute ERP Tool
         try:
             erp_raw = get_erp_product_details.invoke({
                 "product_id": context.product_id,
@@ -204,26 +204,34 @@ class OfferAgent:
         stock_val = erp_data.get("stock_quantity", decision_result["details"].get("stock"))
         margin_val = erp_data.get("margin_percentage", decision_result["details"].get("margin"))
         segment_val = crm_data.get("segment", customer_segment)
-        customer_display = crm_data.get("customer_name", "Müşteri")
+        customer_display = crm_data.get("customer_name", "Partner")
 
         summary_parts = [
-            f"{context.offer_id} numaralı teklif için CRM sistemi üzerinden '{segment_val}' segmenti doğrulandı."
+            f"For offer {context.offer_id}, partner segment '{segment_val}' was verified via CRM."
         ]
 
         if stock_val is not None and margin_val is not None:
-            summary_parts.append(f"ERP sisteminde mevcut stok {stock_val} adet, hesaplanan net marj %{margin_val} seviyesindedir.")
+            summary_parts.append(
+                f"ERP records indicate available stock of {stock_val} units with a projected net margin of {margin_val}%."
+            )
 
         if decision == "NEED_APPROVAL":
-            summary_parts.append(f"Belirlenen iş kuralı gerekçeleri ({reason_codes_str}) doğrultusunda yönetici onayı gerekmektedir.")
+            summary_parts.append(
+                f"Managerial approval is required due to triggered policy rules ({reason_codes_str})."
+            )
             approval_draft = (
-                f"{context.offer_id} teklifi {customer_display} için {reason_codes_str} "
-                f"gerekçeleriyle onayınıza sunulmuştur."
+                f"Offer {context.offer_id} for {customer_display} submitted for manager review "
+                f"due to: {reason_codes_str}."
             )
         elif decision == "REJECT":
-            summary_parts.append(f"Belirlenen gerekçeler ({reason_codes_str}) nedeniyle teklif doğrudan reddedilmiştir.")
+            summary_parts.append(
+                f"Offer was rejected based on policy criteria ({reason_codes_str})."
+            )
             approval_draft = None
         else:
-            summary_parts.append("Stok, kar marjı ve veri bütünlüğü kriterleri sağlandığı için teklif onaylanmıştır.")
+            summary_parts.append(
+                "Offer approved: Stock availability, profit margin, and data integrity criteria are fully satisfied."
+            )
             approval_draft = None
 
         return {
@@ -233,20 +241,20 @@ class OfferAgent:
         }
 
     def _fallback_summary(self, decision_result: Dict[str, Any]) -> Dict[str, Any]:
-        """LLM arızası durumunda devreye giren deterministik yedek mekanizma."""
+        """Deterministic fallback mechanism triggered when LLM services encounter errors or timeouts."""
         decision = decision_result["decision"]
         reason_codes = ", ".join(decision_result["reason_codes"])
 
         result = {
-            "ai_summary": f"Sistem özeti: Karar {decision} olarak belirlendi. Gerekçe kodları: {reason_codes}.",
+            "ai_summary": f"System summary: Decision evaluated as {decision}. Reason codes: {reason_codes}.",
             "approval_message_draft": None,
             "ai_source": "fallback"
         }
 
         if decision == "NEED_APPROVAL":
             result["approval_message_draft"] = (
-                f"Otomatik Mesaj: Bu teklif iş kurallarına göre onaya düşmüştür ({reason_codes}). "
-                "Lütfen değerlendiriniz."
+                f"Automated Notification: Offer routed for managerial approval according to business policy ({reason_codes}). "
+                "Please review."
             )
 
         return result

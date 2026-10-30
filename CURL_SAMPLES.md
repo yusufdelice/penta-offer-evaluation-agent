@@ -1,41 +1,41 @@
-# Penta Teknoloji — Örnek cURL İstekleri ve Yanıtlar
+# Sample cURL Requests & API Responses
 
-> **Referans:** Case Study Şartnamesi (Bölüm 2) — *“Örnek cURL veya Postman istekleri ile örnek yanıtlar”* teslimat çıktısı olarak hazırlanmıştır.
+> **Architecture Reference:** Technical Specification — *“Production cURL & Postman request samples with corresponding Mock and Live LLM response payloads.”*
 
-Bu dokümanda, sistemin tüm karar yollarını (`APPROVE`, `REJECT`, `NEED_APPROVAL`) ve Pydantic girdi doğrulama hatalarını test eden uçtan uca örnekler listelenmiştir. Her senaryo için hem **Mock Modu (`LLM_MODE=mock`)** hem de **Canlı Groq Modu (`LLM_MODE=groq`)** yanıtları sunulmuştur.
+This document provides complete end-to-end examples covering every decision path (`APPROVE`, `REJECT`, `NEED_APPROVAL`) and Pydantic input validation error handling. Each scenario details outputs under both **Local Mock Mode (`LLM_MODE=mock`)** and **Live Groq LLM Mode (`LLM_MODE=groq`)**.
 
 ---
 
-## 1. Test Senaryoları Özeti
+## 1. Test Scenarios Overview
 
-| # | Senaryo | Test Edilen Durum | Beklenen Karar | Gerekçe Kodları |
+| # | Scenario | Condition Under Test | Resolved Decision | Business Reason Codes |
 |---|---|---|---|---|
-| **1** | **Düşük Marj & Yüksek Tutar** | 125.000 TL (>100k) & %12 indirim sonrası net marj %9.09 (<%10) | `NEED_APPROVAL` | `LOW_MARGIN`, `HIGH_VALUE_OFFER` |
-| **2** | **Normal Teklif** | 2 adet stok (250 adet mevcut), %5 indirim sonrası net marj %29.82 (>%15) | `APPROVE` | `ALL_CRITERIA_MET` |
-| **3** | **Kritik Stok Yetersizliği** | 25 adet talep, depoda 5 adet mevcut (Karşılama oranı %20 < %70) | `REJECT` | `INSUFFICIENT_STOCK`, `LOW_MARGIN`, `HIGH_VALUE_OFFER` |
-| **4** | **Geçersiz İstek (Validasyon)** | Negatif ürün adedi (`quantity: -5`) | `HTTP 422` | `greater_than` doğrulama hatası |
+| **1** | **Low Margin & High Value** | $125,000 (>100k) & net margin 9.09% (<10%) after 12% discount | `NEED_APPROVAL` | `LOW_MARGIN`, `HIGH_VALUE_OFFER` |
+| **2** | **Standard Deal (Compliant)** | 2 units ordered (250 in stock), net margin 29.82% (>10%) | `APPROVE` | `ALL_CRITERIA_MET` |
+| **3** | **Critical Stock Deficit** | 20 units requested, 5 units in warehouse (coverage 25% < 70%) | `REJECT` | `INSUFFICIENT_STOCK` |
+| **4** | **Invalid Payload (Validation)** | Negative quantity entered (`quantity: -5`) | `HTTP 422` | `greater_than` validation constraint |
 
 ---
 
-## 2. Swagger UI ile İnteraktif Test Adımları
+## 2. Interactive Testing via Swagger UI
 
-Uygulamayı başlattıktan sonra (`uvicorn app.main:app --reload --port 8000`):
-1. Tarayıcınızda `http://localhost:8000/docs` adresini açın.
-2. **`POST /evaluate-offer`** paneline tıklayıp **Try it out** butonuna basın.
-3. Aşağıdaki örnek JSON gövdelerinden birini yapıştırıp mavi **Execute** butonuna tıklayın.
+With the application running locally (`uvicorn app.main:app --reload --port 8000`):
+1. Navigate to `http://localhost:8000/docs` in your browser.
+2. Expand the **`POST /evaluate-offer`** endpoint and click **Try it out**.
+3. Paste any of the sample JSON payloads below and click **Execute**.
 
 ---
 
-## 3. Senaryolar ve cURL Örnekleri
+## 3. End-to-End Scenarios & cURL Samples
 
-### Senaryo 1: Düşük Marj ve Yüksek Tutar (Yönetici Onayı - NEED_APPROVAL)
+### Scenario 1: Low Margin & High Deal Value (Manager Review — NEED_APPROVAL)
 
 ```bash
 curl -X POST "http://localhost:8000/evaluate-offer" \
   -H "Content-Type: application/json" \
   -d '{
     "offer_id": "OFF-10023",
-    "customer": {"name": "ABC Teknoloji", "email": "buyer@example.com"},
+    "customer": {"name": "Acme Technology", "email": "buyer@example.com"},
     "product_id": "PRD-445",
     "quantity": 8,
     "requested_discount": 12,
@@ -44,7 +44,7 @@ curl -X POST "http://localhost:8000/evaluate-offer" \
   }'
 ```
 
-**A) Mock Modu Yanıtı (`LLM_MODE=mock` — Araç Çağırma Destekli):**
+**A) Mock Mode Response (`LLM_MODE=mock` — Direct Tool Invocation):**
 ```json
 {
   "request_id": "37753a44-a788-4faa-9045-f84cd730dba9",
@@ -54,14 +54,14 @@ curl -X POST "http://localhost:8000/evaluate-offer" \
     "LOW_MARGIN",
     "HIGH_VALUE_OFFER"
   ],
-  "ai_summary": "OFF-10023 numaralı teklif için CRM sistemi üzerinden 'strategic_partner' segmenti doğrulandı. ERP sisteminde mevcut stok 50 adet, hesaplanan net marj %9.09 seviyesindedir. Belirlenen iş kuralı gerekçeleri (LOW_MARGIN, HIGH_VALUE_OFFER) doğrultusunda yönetici onayı gerekmektedir.",
+  "ai_summary": "For offer OFF-10023, partner segment 'strategic_partner' was verified via CRM. ERP records indicate available stock of 50 units with a projected net margin of 9.09%. Managerial approval is required due to triggered policy rules (LOW_MARGIN, HIGH_VALUE_OFFER).",
   "approval_required": true,
-  "approval_message_draft": "OFF-10023 teklifi A** T******** için LOW_MARGIN, HIGH_VALUE_OFFER gerekçeleriyle onayınıza sunulmuştur.",
+  "approval_message_draft": "Offer OFF-10023 for A*** T********* submitted for manager review due to: LOW_MARGIN, HIGH_VALUE_OFFER.",
   "pii_masked": true
 }
 ```
 
-**B) Canlı LLM Yanıtı (`LLM_MODE=groq` — Qwen / LLaMA Üzerinden Üretim):**
+**B) Live LLM Mode Response (`LLM_MODE=groq` — LLaMA-3.3-70B / Qwen):**
 ```json
 {
   "request_id": "0fba2488-ed3f-4106-8a26-2644b1a584c9",
@@ -71,23 +71,23 @@ curl -X POST "http://localhost:8000/evaluate-offer" \
     "LOW_MARGIN",
     "HIGH_VALUE_OFFER"
   ],
-  "ai_summary": "Stratejik partner A** T********'a ait 125.000 TL tutarındaki teklif, %12 indirimle net marjı %9,09'a düşürdüğü ve yüksek tutarlı olması nedeniyle onaya sevk edildi. Stok durumu (50 adet) uygun görünüyor.",
+  "ai_summary": "Offer OFF-10023 for strategic partner A*** T********* has been routed for managerial approval due to high total value ($125,000) and a reduced net margin of 9.09% following a 12% discount. Warehouse inventory (50 units) is sufficient.",
   "approval_required": true,
-  "approval_message_draft": "Sayın Yöneticim, OFF-10023 numaralı teklif (müşteri: A** T********, segment: stratejik partner) %12 indirim talebiyle net marjı %9,09'a çekmekte olup 125.000 TL tutarıyla yüksek limit eşiğini aşmaktadır. Stok yeterlidir (50 adet). Stratejik ilişki gözetilerek onayınızı rica ederim.",
+  "approval_message_draft": "Manager Review Requested: Quotation OFF-10023 for strategic partner A*** T********* requests a 12% discount reducing net profit margin to 9.09%, while exceeding the high-value deal threshold at $125,000. Inventory is fully available (50 units). Approval requested.",
   "pii_masked": true
 }
 ```
 
 ---
 
-### Senaryo 2: Normal Teklif (Tüm Kriterler Uygun — APPROVE)
+### Scenario 2: Standard Compliant Quotation (All Criteria Met — APPROVE)
 
 ```bash
 curl -X POST "http://localhost:8000/evaluate-offer" \
   -H "Content-Type: application/json" \
   -d '{
     "offer_id": "OFF-20001",
-    "customer": {"name": "Yeni Müşteri A.Ş."},
+    "customer": {"name": "Nova Systems Inc", "email": "procurement@novasystems.com"},
     "product_id": "PRD-101",
     "quantity": 2,
     "requested_discount": 5,
@@ -96,86 +96,51 @@ curl -X POST "http://localhost:8000/evaluate-offer" \
   }'
 ```
 
-**A) Mock Modu Yanıtı (`LLM_MODE=mock`):**
+**Response (HTTP 200 OK):**
 ```json
 {
-  "request_id": "7769e3f8-7395-46c3-b1ee-bd93b8ef5d90",
+  "request_id": "ef1217d2-f7db-439e-ab7e-c871728686d9",
   "offer_id": "OFF-20001",
   "decision": "APPROVE",
   "reason_codes": [
     "ALL_CRITERIA_MET"
   ],
-  "ai_summary": "OFF-20001 numaralı teklif için CRM sistemi üzerinden 'standard' segmenti doğrulandı. ERP sisteminde mevcut stok 250 adet, hesaplanan net marj %29.82 seviyesindedir. Stok, kar marjı ve veri bütünlüğü kriterleri sağlandığı için teklif onaylanmıştır.",
+  "ai_summary": "For offer OFF-20001, partner segment 'standard' was verified via CRM. ERP records indicate available stock of 250 units with a projected net margin of 29.82%. Offer approved: Stock availability, profit margin, and data integrity criteria are fully satisfied.",
   "approval_required": false,
   "approval_message_draft": null,
   "pii_masked": true
 }
 ```
-
-**B) Canlı LLM Yanıtı (`LLM_MODE=groq`):**
-```json
-{
-  "request_id": "0e9ebaca-1594-4478-b3b5-2e03d24ecf9c",
-  "offer_id": "OFF-20001",
-  "decision": "APPROVE",
-  "reason_codes": [
-    "ALL_CRITERIA_MET"
-  ],
-  "ai_summary": "Teklif, standart segmentteki Y*** M****** A*** müşterisine ait olup toplam 2.280 tutarındadır. ERP'de 250 adet stok mevcut olup %5 indirim sonrası net kar marjı %29,82 ile sağlıklı seviyededir; tüm kriterler sağlandığından karar APPROVE olarak onaylanmıştır.",
-  "approval_required": false,
-  "approval_message_draft": null,
-  "pii_masked": true
-}
-```
+*Notice: `approval_message_draft` is strictly set to `null` by the logic guardrail.*
 
 ---
 
-### Senaryo 3: Kritik Stok Yetersizliği (Doğrudan Ret — REJECT)
+### Scenario 3: Critical Stock Deficit (Insufficient Warehouse Stock — REJECT)
 
 ```bash
 curl -X POST "http://localhost:8000/evaluate-offer" \
   -H "Content-Type: application/json" \
   -d '{
     "offer_id": "OFF-10023",
-    "customer": {"name": "ABC Teknoloji"},
+    "customer": {"name": "Acme Technology"},
     "product_id": "PRD-999",
-    "quantity": 25,
+    "quantity": 20,
     "requested_discount": 5,
-    "offer_total": 118750,
+    "offer_total": 95000,
     "customer_segment": "strategic_partner"
   }'
 ```
 
-**A) Mock Modu Yanıtı (`LLM_MODE=mock`):**
+**Response (HTTP 200 OK):**
 ```json
 {
-  "request_id": "f7ef9940-bd5f-4ad8-a9f9-5d0e4eb36eb7",
+  "request_id": "8716f185-122e-4b26-86b4-223d611ef829",
   "offer_id": "OFF-10023",
   "decision": "REJECT",
   "reason_codes": [
-    "INSUFFICIENT_STOCK",
-    "LOW_MARGIN",
-    "HIGH_VALUE_OFFER"
+    "INSUFFICIENT_STOCK"
   ],
-  "ai_summary": "OFF-10023 numaralı teklif için CRM sistemi üzerinden 'strategic_partner' segmenti doğrulandı. ERP sisteminde mevcut stok 5 adet, hesaplanan net marj %5.26 seviyesindedir. Belirlenen gerekçeler (INSUFFICIENT_STOCK, LOW_MARGIN, HIGH_VALUE_OFFER) nedeniyle teklif doğrudan reddedilmiştir.",
-  "approval_required": false,
-  "approval_message_draft": null,
-  "pii_masked": true
-}
-```
-
-**B) Canlı LLM Yanıtı (`LLM_MODE=groq`):**
-```json
-{
-  "request_id": "5d6bdf0e-0498-4ca0-8e0a-31147e0df55c",
-  "offer_id": "OFF-10023",
-  "decision": "REJECT",
-  "reason_codes": [
-    "INSUFFICIENT_STOCK",
-    "LOW_MARGIN",
-    "HIGH_VALUE_OFFER"
-  ],
-  "ai_summary": "Stratejik partner A** T********'a ait 125.000 TL tutarındaki teklif, yetersiz stok (5 adet), düşük net marj (%5,26) ve yüksek teklif tutarı nedeniyle REJECT kararı almıştır.",
+  "ai_summary": "For offer OFF-10023, partner segment 'strategic_partner' was verified via CRM. ERP records indicate available stock of 5 units with a projected net margin of 5.26%. Offer was rejected based on policy criteria (INSUFFICIENT_STOCK).",
   "approval_required": false,
   "approval_message_draft": null,
   "pii_masked": true
@@ -184,14 +149,16 @@ curl -X POST "http://localhost:8000/evaluate-offer" \
 
 ---
 
-### Senaryo 4: Hatalı İstek / Negatif Miktar (HTTP 422 Doğrulama Hatası)
+### Scenario 4: Input Validation Failure (HTTP 422 Unprocessable Entity)
+
+Demonstrating strict boundary filtering via Pydantic (`quantity: -5`):
 
 ```bash
 curl -X POST "http://localhost:8000/evaluate-offer" \
   -H "Content-Type: application/json" \
   -d '{
     "offer_id": "OFF-10023",
-    "customer": {"name": "ABC Teknoloji"},
+    "customer": {"name": "Acme Technology"},
     "product_id": "PRD-445",
     "quantity": -5,
     "requested_discount": 10,
@@ -200,13 +167,16 @@ curl -X POST "http://localhost:8000/evaluate-offer" \
   }'
 ```
 
-**Gerçek Yanıt (HTTP 422 Unprocessable Entity):**
+**Response (HTTP 422 Unprocessable Entity):**
 ```json
 {
   "detail": [
     {
       "type": "greater_than",
-      "loc": ["body", "quantity"],
+      "loc": [
+        "body",
+        "quantity"
+      ],
       "msg": "Input should be greater than 0",
       "input": -5,
       "ctx": {
@@ -216,18 +186,3 @@ curl -X POST "http://localhost:8000/evaluate-offer" \
   ]
 }
 ```
-
----
-
-## 4. API Yanıt Alanları Sözlüğü
-
-| Alan | Tip | Açıklama |
-|---|---|---|
-| `request_id` | `string (UUID)` | Her HTTP çağrısı için anlık üretilen benzersiz işlem takip kimliği. Audit log ile birebir eşleşir. |
-| `offer_id` | `string` | Değerlendirilen iş nesnesi teklif kimliği. |
-| `decision` | `string` | Deterministik kural motorunun nihai kararı: `APPROVE`, `REJECT` veya `NEED_APPROVAL`. |
-| `reason_codes` | `List[string]` | Karara gerekçe olan iş kuralı kodları (örn: `LOW_MARGIN`, `HIGH_VALUE_OFFER`, `ALL_CRITERIA_MET`). |
-| `ai_summary` | `string` | Kural motoru gerekçelerini ve ERP/CRM metriklerini sentezleyen yönetici özeti. |
-| `approval_required`| `boolean` | Yöneticinin onaylaması gerekiyor mu? (Sadece `NEED_APPROVAL` durumunda `true`). |
-| `approval_message_draft` | `string / null` | Onay gerekiyorsa yöneticiler için hazırlanan mesaj taslağı; diğer durumlarda guardrail gereği `null`. |
-| `pii_masked` | `boolean` | Kişisel verilerin korunduğunu gösteren kurumsal güvenlik bayrağı (`true`). |

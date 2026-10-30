@@ -14,21 +14,21 @@ offer_agent = OfferAgent()
 @router.post("/evaluate-offer", response_model=OfferResponse)
 def evaluate_offer(request: OfferRequest):
     """
-    Teklif ön değerlendirme uç noktası.
-    Her istek için benzersiz bir request_id (işlem kimliği) üretilir ve loglanır.
+    Offer pre-evaluation endpoint.
+    A unique request_id is generated for every call to ensure end-to-end traceability.
     """
     request_id = str(uuid.uuid4())
 
     try:
         offer_data = request.model_dump()
 
-        # 1. Deterministik değerlendirme
+        # 1. Deterministic evaluation via rule engine
         decision_result = decision_engine.evaluate(offer_data)
 
-        # 2. Denetim günlüğü (Kişisel veri içermeyen, request_id ile izlenebilir kayıt)
+        # 2. Audit log entry (Zero PII, trace-indexed with request_id)
         log_offer_evaluation(offer_data, decision_result, request_id)
 
-        # 3. AI karar özeti (PII içermeyen bağlam ile)
+        # 3. AI decision synthesis (PII-free context)
         agent_context = AgentContext(
             offer_id=offer_data["offer_id"],
             requested_discount=offer_data["requested_discount"],
@@ -44,7 +44,7 @@ def evaluate_offer(request: OfferRequest):
             offer_id=request.offer_id,
             decision=decision_result["decision"],
             reason_codes=decision_result["reason_codes"],
-            ai_summary=ai_result.get("ai_summary", "Özet oluşturulamadı."),
+            ai_summary=ai_result.get("ai_summary", "Summary could not be generated."),
             approval_required=(decision_result["decision"] == "NEED_APPROVAL"),
             approval_message_draft=ai_result.get("approval_message_draft"),
             pii_masked=True
@@ -54,12 +54,12 @@ def evaluate_offer(request: OfferRequest):
         log_error(request.offer_id, f"Integration Error: {str(fnf_err)}", request_id)
         raise HTTPException(
             status_code=502,
-            detail="Kurumsal sistem entegrasyon veri dosyası bulunamadı."
+            detail="Enterprise system integration data file not found."
         )
 
     except Exception as e:
         log_error(request.offer_id, f"{type(e).__name__}: {str(e)}", request_id)
         raise HTTPException(
             status_code=500,
-            detail="Teklif değerlendirme sırasında bir hata oluştu."
+            detail="An internal error occurred during offer evaluation."
         )

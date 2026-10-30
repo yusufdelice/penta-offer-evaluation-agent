@@ -1,229 +1,214 @@
-# Penta Teknoloji — Yapay Zekâ Destekli Teklif Ön Değerlendirme Agent API
+# AI-Powered B2B Quotation Pre-Evaluation Agent API
 
-> **Teslimat Kapsamı Notu:** Bu dokümantasyon; şartnamede (Bölüm 2) talep edilen çıktıları derli toplu sunan ana mimari rapordur. Şartnamede bağımsız incelenmesi beklenen modüler çıktılar repo kök dizinindeki ilgili dosyalara ayrıştırılmış olup aşağıdaki indekste özetlenmiştir.
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com)
+[![LangChain](https://img.shields.io/badge/LangChain-0.3+-green.svg)](https://www.langchain.com/)
+[![Pydantic v2](https://img.shields.io/badge/Pydantic-v2.9+-red.svg)](https://docs.pydantic.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+> **Enterprise Case Study Prototype:** An end-to-end, privacy-preserving AI decision support service designed for high-volume B2B technology distribution. It combines deterministic business rule engines, zero-PII data privacy guardrails, ERP/CRM tool calling, and resilient LLM deal summarization.
 
 ---
 
-## Teslimat Çıktıları İndeksi
+## Architectural Deliverables Index
 
-| # | Şartname Çıktı Tanımı | Karşılık Gelen Dosya / Dizin | Açıklama |
+| # | Deliverable | Associated File / Directory | Description |
 |---|---|---|---|
-| **1** | **Kaynak Kodlar** | [`app/`](app/), [`tests/`](tests/) | FastAPI API, DecisionEngine kural motoru, PII koruma ve LangChain ajanı. |
-| **2** | **Kurulum ve Çalıştırma Kılavuzu** | Bu dosya ([`README.md`](README.md)) | Hızlı başlangıç, mimari diyagramlar, tasarım kararları ve test adımları. |
-| **3** | **Mock Veri & Servis Yaklaşımı** | [`MOCK_SERVICES.md`](MOCK_SERVICES.md) | `data/` dosyalarının şemaları, Service/Adapter deseni ve 502 hata yönetimi. |
-| **4** | **Örnek cURL İstekleri ve Yanıtlar** | [`CURL_SAMPLES.md`](CURL_SAMPLES.md) | 4 uç senaryonun cURL komutları, Mock ve canlı Groq LLM yanıtları. |
-| **5** | **Kişisel Veri İçermeyen Audit Logları** | [`AUDIT_LOGS.md`](AUDIT_LOGS.md) | `logs/audit.log` mimarisi, sıfır PII prensibi ve izlenebilirlik kayıtları. |
-| **6** | **AI Değerlendirme Notu** | [`AI_EVALUATION_NOTE.md`](AI_EVALUATION_NOTE.md) | Yapay zekâ kullanım amacı, sınırları, guardrail ve KVKK yaklaşımı. |
+| **1** | **Source Code** | [`app/`](app/), [`tests/`](tests/) | FastAPI application, deterministic `DecisionEngine`, PII scrubbers, and LangChain `OfferAgent`. |
+| **2** | **Setup & Architecture Guide** | This document ([`README.md`](README.md)) | Quick start, system diagrams, design decisions, and automated test specifications. |
+| **3** | **Mock Services & Data Sets** | [`MOCK_SERVICES.md`](MOCK_SERVICES.md) | Schemas for `data/` files, Service & Adapter pattern, and HTTP 502 gateway error handling. |
+| **4** | **Sample cURL Requests & Responses** | [`CURL_SAMPLES.md`](CURL_SAMPLES.md) | End-to-end test cases across all decision branches in Mock and live Groq LLM modes. |
+| **5** | **Privacy-Preserving Audit Logs** | [`AUDIT_LOGS.md`](AUDIT_LOGS.md) | `logs/audit.log` architecture, Zero-PII compliance, and UUID transaction traceability. |
+| **6** | **AI Evaluation Report** | [`AI_EVALUATION_NOTE.md`](AI_EVALUATION_NOTE.md) | AI role positioning, tool-calling scope, 4-tier guardrails, and compliance principles. |
 
 ---
 
-## Hızlı Başlangıç (Quick Start)
-
-Sistemi 30 saniye içinde yerel ortamda çalıştırmak için:
+## Quick Start (Run Locally in 30 Seconds)
 
 ```bash
-# 1. Bağımlılıkları yükleyin (Python 3.10+)
+# 1. Install dependencies (Python 3.10+)
 pip install -r requirements.txt
 
-# 2. Uygulamayı varsayılan Mock modunda başlatın (Harici API anahtarı gerekmez)
+# 2. Launch the application in default Mock mode (no external API keys required)
 uvicorn app.main:app --reload --port 8000
 ```
 
-- **İnteraktif Test Arayüzü (Swagger UI):** `http://localhost:8000/docs`
-- **Sağlık Denetimi (Health Check):** `http://localhost:8000/`
-- **Uçtan Uca Akış:** `HTTP İstek` → `Pydantic 422 Doğrulama` → `Deterministik Kural Motoru` → `LangChain Tool Calling` → `Guardrail` → `JSON Yanıt`.
+- **Interactive API Documentation (Swagger UI):** `http://localhost:8000/docs`
+- **Health Check Endpoint:** `http://localhost:8000/`
+- **Request Pipeline:** `HTTP Request` → `Pydantic 422 Validation` → `Deterministic Rule Engine` → `LangChain Tool Calling` → `4-Layer Guardrails` → `Structured JSON Response`.
 
 ---
 
-## 1. Proje Mimarisi ve Temel Tasarım İlkeleri
+## 1. System Architecture & Core Principles
 
-Sistem, yapay zekâyı kritik iş kararlarını veren bir kara kutu olarak değil, **deterministik iş kurallarının çıktısını özetleyen ve yönetici onay süreçlerini hızlandıran bir karar destek asistanı** olarak konumlandırır:
+The platform positions Artificial Intelligence not as an opaque decision-maker, but as a **deterministic decision-support copilot** that synthesizes business rule outputs, correlates ERP/CRM data via tool calling, and accelerates managerial review workflows:
 
 ```mermaid
 flowchart LR
-    A["Bayi / İstemci"] -->|"JSON Teklif İsteği"| B["FastAPI Endpoint (/evaluate-offer)"]
-    B -->|"Pydantic Doğrulama"| C["Kural Tabanlı Karar Motoru"]
-    C <-->|"Müşteri Segmenti Doğrulama"| D[("Mock CRM")]
-    C <-->|"Stok, Maliyet ve Marj"| E[("Mock ERP")]
-    C -->|"Karar ve Gerekçe Kodları"| F["Audit Logging (Sıfır PII)"]
-    C -->|"AgentContext (Sıfır PII)"| G["LangChain OfferAgent"]
-    G <-->|"Tool Calling (ERP & CRM)"| H["ERP ve CRM Araçları"]
-    G -->|"ai_summary ve Onay Taslağı"| I["Pydantic Doğrulama & Guardrail"]
+    A["Partner / Client"] -->|"JSON Quotation Request"| B["FastAPI Endpoint (/evaluate-offer)"]
+    B -->|"Pydantic Validation"| C["Deterministic Decision Engine"]
+    C <-->|"Account Tier & Registration"| D[("Mock CRM")]
+    C <-->|"Real-Time Stock & Margin Math"| E[("Mock ERP")]
+    C -->|"Decision & Reason Codes"| F["Audit Logging (Zero-PII)"]
+    C -->|"Sanitized AgentContext"| G["LangChain OfferAgent"]
+    G <-->|"Read-Only Tool Calling"| H["ERP & CRM Tools"]
+    G -->|"Executive Summary & Approval Draft"| I["Pydantic Contract & Guardrails"]
     I -->|"OfferResponse (JSON)"| A
 ```
 
-### Temel Mimari Prensipler:
-1. **Deterministik Karar Verme:** Nihai karar (`APPROVE`, `REJECT`, `NEED_APPROVAL`) kural tabanlı `DecisionEngine` tarafından verilir. Yapay zekâ iş kurallarının kararını asla değiştiremez veya geçersiz kılamaz.
-2. **Veri Minimizasyonu (Sıfır PII):** Müşteri adı, e-posta ve telefon gibi kişisel veriler dış LLM sağlayıcısına iletilmez; denetim loglarına ise hiç dahil edilmez. Ajan katmanına yalnızca operasyonel `AgentContext` nesnesi aktarılır.
-3. **Kesintisiz Hizmet ve Hata Toleransı:** Harici LLM servisinde gecikme, hız sınırı (429) veya bağlantı kopması yaşansa dahi sistem kural tabanlı deterministik yedek özetiyle (`_fallback_summary`) kesintisiz çalışmaya devam eder.
-4. **Çift Modlu Çalışma Desteği:** Sistem harici API anahtarına ihtiyaç duymadan yerel Mock modunda çalışabildiği gibi, Groq API anahtarı tanımlandığında canlı araç çağıran LLM moduna geçer.
+### Core Architecture Pillars:
+1. **Deterministic Decision Making:** The final verdict (`APPROVE`, `REJECT`, `NEED_APPROVAL`) is produced strictly by the rule-based `DecisionEngine`. The AI model can never alter or override business policy.
+2. **Data Minimization (Zero-PII):** Customer personal identities (names, emails, phones) are stripped before context reaches external LLMs and are completely excluded from audit logs. The AI layer receives only a minimal, sanitized `AgentContext`.
+3. **High Availability & Fault Resilience:** In the event of external LLM latency, rate-limiting (HTTP 429), or service outages, the system seamlessly activates a deterministic fallback summary (`_fallback_summary`), maintaining 100% service uptime.
+4. **Dual Operating Modes:** Works out of the box in offline **Mock Mode** using deterministic tool execution; automatically switches to autonomous LLM tool calling when a **Groq API Key** is configured.
 
 ---
 
-## 2. Tasarım Kararları ve Mimari Varsayımlar
+## 2. Design Decisions & Enterprise Assumptions
 
-1. **What-If (Taslak Teklif Simülasyonu) Yaklaşımı:**  
-   Teklif değerlendirme isteklerinin satış temsilcisi tarafından CRM portalı üzerinden yapıldığı varsayılmıştır. Satış temsilcisi teklifi CRM'e kesin kaydetmeden önce ekranda farklı adet ve iskonto kombinasyonlarını simüle edebilir. Bu nedenle `quantity`, `requested_discount`, `product_id` alanları request body üzerinden dinamik olarak alınır; CRM'deki kayıt ise bayi segmenti ve müşteri geçmişi doğrulaması için kullanılır.
-2. **Ön Değerlendirmenin Yan Etkisiz (Idempotent) Olması:**  
-   `/evaluate-offer` servisi veritabanına kayıt yazmaz. CRM'de kaydı bulunmayan bir teklif sorgulandığında CRM veritabanına otomatik kayıt açılmaz; böylece taslak sorgularla kurumsal veritabanının kirlenmesi ve mükerrer kayıt riski önlenir.
-3. **Senkron Çalışma Modeli:**  
-   FastAPI uç noktası kasıtlı olarak `def` (senkron worker thread) tanımlanmıştır. Yerel JSON dosya okuma ve LangChain zinciri senkron çalıştığı için, FastAPI'nin bu çağrıları dahili anyio worker threadpool'unda koşturması ana asenkron event loop'un kilitlenmesini engeller.
-4. **Kısmi Stok ve Tedarik Eşiği (%70 Oranı):**  
-   Talep edilen ürünün %70 veya daha fazlası depoda mevcutsa (`Karşılama >= %70`), satış fırsatını kaçırmamak adına teklif doğrudan reddedilmez; tedarik zinciriyle koordinasyon sağlanması amacıyla `NEED_APPROVAL` (`SLIGHTLY_LOW_STOCK`) statüsüne alınır. %70'in altı doğrudan `REJECT` (`INSUFFICIENT_STOCK`) kabul edilir.
+1. **What-If Deal Simulation Approach:**  
+   Sales representatives frequently test various discount and quantity scenarios before locking a deal into the CRM. Consequently, `quantity`, `requested_discount`, and `product_id` are supplied dynamically in the request body, while the CRM backend verifies account credit tiers and deal registration legitimacy.
+2. **Idempotent Evaluation (Side-Effect Free):**  
+   The `/evaluate-offer` endpoint is purely read-only and idempotent. Querying an unregistered deal will not pollute enterprise databases with draft records, preventing data corruption.
+3. **Synchronous Worker Thread Model:**  
+   FastAPI endpoints are deliberately declared with `def` rather than `async def`. Because local JSON file reads and LangChain invocation chains are synchronous, running them inside FastAPI's internal AnyIO worker threadpool prevents blocking the main event loop.
+4. **Partial Inventory Threshold (70% Rule):**  
+   If available stock covers at least 70% of the requested order volume (`Coverage >= 70%`), the offer is not rejected outright; it is escalated to `NEED_APPROVAL` (`SLIGHTLY_LOW_STOCK`) to allow supply chain coordination. Orders covering less than 70% are automatically rejected (`INSUFFICIENT_STOCK`).
 
 ---
 
-## 3. Klasör Yapısı
+## 3. Directory Layout
 
 ```
 project/ 
   app/ 
-    main.py                 # FastAPI ana uygulaması ve health-check
-    config.py               # Pydantic BaseSettings yapılandırması (.env)
+    main.py                 # FastAPI application root & health check
+    config.py               # Pydantic BaseSettings environment configuration
     api/ 
-      routes.py             # /evaluate-offer uç noktası ve orkestrasyon
-      schemas.py            # Pydantic istek/yanıt şemaları (gt=0, ge=0.0 sınırları)
+      routes.py             # /evaluate-offer endpoint & orchestration pipeline
+      schemas.py            # Pydantic v2 request/response validation contracts
     core/ 
-      decision_engine.py     # Deterministik iş kuralları ve karar motoru
-      pii.py                 # KVKK/PII maskeleme fonksiyonları
+      decision_engine.py     # Deterministic business rules & decision resolution
+      pii.py                 # PII masking utilities (names, emails, phone numbers)
     services/ 
-      crm_client.py          # Mock CRM istemcisi (teklif ve segment doğrulama)
-      erp_client.py          # Mock ERP istemcisi (stok, maliyet, fiyat, dinamik marj)
+      crm_client.py          # CRM adapter (deal registration & partner tiers)
+      erp_client.py          # ERP adapter (inventory lookup & net profit margin math)
     ai/ 
-      offer_agent.py         # LangChain Agent, Tool Calling & Fallback yönetimi
-      prompts.py             # Sistem promptları ve gerekçe kodu sözlüğü
+      offer_agent.py         # LangChain agent, tool calling & resilient fallback
+      prompts.py             # System prompt template & reason code dictionary
     utils/ 
-      logger.py              # PII-güvenli JSON audit logging (StreamHandler + FileHandler)
+      logger.py              # Zero-PII JSON audit logging (console + file)
   data/ 
-    offers.json             # Örnek teklif veri kümesi (farklı senaryolar)
-    stock.json              # Depo ve ürün stok verileri
-    prices.json             # Ürün maliyet ve taban fiyat verileri
+    offers.json             # Mock CRM quotation database
+    stock.json              # Mock ERP warehouse inventory records
+    prices.json             # Mock ERP base pricing & procurement cost records
   logs/ 
-    audit.log               # Kişisel veri içermeyen JSON denetim kayıtları
+    audit.log               # Persistent JSON audit logs (Zero-PII compliant)
   tests/ 
-    test_decision_engine.py # 28 adet otomatik birim ve entegrasyon testi
-  AI_EVALUATION_NOTE.md     # [Çıktı 6] Yapay zekâ değerlendirme notu
-  CURL_SAMPLES.md           # [Çıktı 4] Örnek cURL istekleri ve yanıtlar
-  MOCK_SERVICES.md          # [Çıktı 3] Mock veri ve servis deseni açıklaması
-  AUDIT_LOGS.md             # [Çıktı 5] Kişisel veri içermeyen audit log kılavuzu
-  README.md                 # [Çıktı 2] Ana mimari dokümantasyon
-  requirements.txt          # Python bağımlılıkları
+    test_decision_engine.py # 28 automated unit, integration, and guardrail tests
+  AI_EVALUATION_NOTE.md     # [Deliverable 6] AI architecture, scope & guardrails
+  CURL_SAMPLES.md           # [Deliverable 4] Complete cURL commands & JSON responses
+  MOCK_SERVICES.md          # [Deliverable 3] Service pattern & mock schemas
+  AUDIT_LOGS.md             # [Deliverable 5] Zero-PII audit trail specifications
+  README.md                 # [Deliverable 2] System architectural overview
+  requirements.txt          # Python dependencies
 ```
 
 ---
 
-## 4. Kurulum ve Çalıştırma
+## 4. Configuration & Execution Modes
 
-### A. Varsayılan (Mock) Modda Çalıştırma (Harici API Anahtarı Gerekmez):
+### A. Default Local Mock Mode (Zero External Dependencies)
 ```bash
-# Proje dizininde sanal ortam kurup başlatın
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
-- API Temel Adresi: `http://localhost:8000`
-- Swagger UI (İnteraktif Test Arayüzü): `http://localhost:8000/docs`
+- API Endpoint: `http://localhost:8000`
+- Swagger UI Documentation: `http://localhost:8000/docs`
 
-### B. Canlı Groq LLM Modunda Çalıştırma:
-`.env` dosyasını düzenleyin:
+### B. Live Groq LLM Mode (LLaMA-3.3-70B / Qwen)
+Configure `.env`:
 ```bash
 LLM_MODE=groq
 GROQ_API_KEY=gsk_your_groq_api_key_here
-LLM_MODEL=llama-3.3-70b-versatile  # veya qwen/qwen3.8-27b
+LLM_MODEL=llama-3.3-70b-versatile  # or qwen/qwen3.8-27b
 ```
-Sunucuyu yeniden başlatın: `uvicorn app.main:app --reload --port 8000`
+Restart server: `uvicorn app.main:app --reload --port 8000`
 
 ---
 
-## 5. Karar Mekanizması ve İş Kuralları
+## 5. Decision Engine Business Rules Matrix
 
-Karar motoru, gelen teklif verisini CRM ve ERP sistemleriyle çapraz kontrol ederek deterministik olarak değerlendirir:
+The rule engine evaluates incoming quotations against ERP and CRM data, resolving the verdict through severity ranking (**`REJECT` > `NEED_APPROVAL` > `APPROVE`**):
 
-> **Not (Örnek Varsayımlar):** Aşağıdaki eşik değerleri (marj <%10, tutar >100.000 TL, stratejik indirim >%15, stok karşılama oranı %70), case study senaryolarını test edebilmek amacıyla kurgulanmış örnek iş kuralı varsayımlarıdır. Üretim ortamında bu parametreler `.env` veya veritabanı üzerinden dinamik olarak yapılandırılabilir.
-
-| Durum / Kural | Koşul | Üretilen Karar | Gerekçe Kodu |
+| Rule Scenario | Policy Condition | Verdict | Reason Code |
 |---|---|---|---|
-| **Stok Yok** | Depo stoğu <= 0 | `REJECT` | `OUT_OF_STOCK` |
-| **Kritik Stok Yetersizliği** | Stok < Talep ve Karşılama Oranı < %70 | `REJECT` | `INSUFFICIENT_STOCK` |
-| **Kısmi Stok (Tedarik Edilebilir)** | Stok < Talep ve Karşılama Oranı >= %70 | `NEED_APPROVAL` | `SLIGHTLY_LOW_STOCK` |
-| **Kritik Düşük Marj** | Net Marj < %10.0 | `NEED_APPROVAL` | `LOW_MARGIN` |
-| **Yüksek Tutarlı Teklif** | Toplam Tutar > 100.000 TL | `NEED_APPROVAL` | `HIGH_VALUE_OFFER` |
-| **Stratejik Bayi Yüksek İndirim** | Segment = `strategic_partner` ve İndirim > %15.0 | `NEED_APPROVAL` | `STRATEGIC_HIGH_DISCOUNT` |
-| **Segment Uyuşmazlığı** | İstekteki segment != CRM kayıtlı segmenti | `NEED_APPROVAL` | `SEGMENT_MISMATCH` |
-| **Bilinmeyen Müşteri / Teklif** | Teklif ID CRM'de kayıtlı değil | `NEED_APPROVAL` | `UNKNOWN_CUSTOMER` |
-| **Tanımsız Ürün** | Ürün ID ERP'de mevcut değil | `REJECT` | `PRODUCT_NOT_FOUND` |
-| **Tüm Kriterler Uygun** | Stok, marj, tutar ve veri bütünlüğü onaylı | `APPROVE` | `ALL_CRITERIA_MET` |
+| **Out of Stock** | Physical inventory <= 0 | `REJECT` | `OUT_OF_STOCK` |
+| **Critical Stock Deficit** | Inventory < Demand and Coverage < 70% | `REJECT` | `INSUFFICIENT_STOCK` |
+| **Slightly Low Stock** | Inventory < Demand and Coverage >= 70% | `NEED_APPROVAL` | `SLIGHTLY_LOW_STOCK` |
+| **Critical Low Margin** | Calculated Net Margin < 10.0% | `NEED_APPROVAL` | `LOW_MARGIN` |
+| **High Value Quotation** | Total Offer Amount > $100,000 | `NEED_APPROVAL` | `HIGH_VALUE_OFFER` |
+| **Strategic Partner High Discount** | Tier = `strategic_partner` and Discount > 15.0% | `NEED_APPROVAL` | `STRATEGIC_HIGH_DISCOUNT` |
+| **Customer Segment Mismatch** | Request tier != CRM registered master tier | `NEED_APPROVAL` | `SEGMENT_MISMATCH` |
+| **Unregistered Offer** | Offer ID does not exist in CRM database | `NEED_APPROVAL` | `UNKNOWN_CUSTOMER` |
+| **Invalid Product SKU** | Product ID does not exist in ERP catalog | `REJECT` | `PRODUCT_NOT_FOUND` |
+| **All Criteria Met** | Inventory, margin, deal value, and data integrity confirmed | `APPROVE` | `ALL_CRITERIA_MET` |
 
-*Net kâr marjı hesabı ve mock veri yapıları için bknz: [`MOCK_SERVICES.md`](MOCK_SERVICES.md)*
+*For mathematical margin formulas and service adapter details, see: [`MOCK_SERVICES.md`](MOCK_SERVICES.md)*
 
 ---
 
-## 6. LangChain / Agent Yaklaşımı ve Guardrail Mimarisi
+## 6. LangChain Tool Calling & 4-Tier Guardrail Architecture
 
-Şartnamede (Bölüm 2) tanımlanan teknik beklentilerin mimarideki karşılıkları ve kod eşleştirmeleri:
+### 4-Layer Guardrail Defense Line
 
-| Minimum Beklentiler | Ek Değer Sağlayan Yaklaşımlar | Projedeki Uygulama / Karşılık Gelen Kod Referansları |
-|---|---|---|
-| **Prompt template kullanımı** | Prompt içeriklerinde kişisel verilerin maskelenmesi ve veri minimizasyonu. | [`app/ai/prompts.py`](app/ai/prompts.py) & [`app/ai/offer_agent.py`](app/ai/offer_agent.py)<br>• Modüler `ChatPromptTemplate` yapısı.<br>• Prompt'a müşteri adı, e-posta aktarılmaz; izole `AgentContext` iletilir. |
-| **Tool / function calling yaklaşımı** | ERP ve CRM fonksiyonlarının agent iş akışı içerisinde kontrollü kullanımı. | [`app/ai/offer_agent.py`](app/ai/offer_agent.py) (`@tool get_crm_offer_details`, `@tool get_erp_product_details`)<br>• Salt-okunur LangChain `@tool` fonksiyonları.<br>• CRM aracı müşteri adını maskeli (`A** T********`) döndürür. |
-| **AI destekli özet üretimi** | Karar motoru çıktılarıyla tutarlı, bağlamsal ve açıklayıcı özetler. | [`app/ai/offer_agent.py`](app/ai/offer_agent.py) (`generate_summary`)<br>• Gerekçe kodlarını kurumsal özete dönüştürür.<br>• Yalnızca onay gereken durumlarda yönetici mesaj taslağı (`approval_message_draft`) üretir. |
-| **Fallback mekanizması** | LLM kaynaklı hata durumlarında uygulamanın kontrollü çalışmaya devam etmesi. | [`app/ai/offer_agent.py`](app/ai/offer_agent.py) (`_fallback_summary`)<br>• Groq API kesintisi veya geçersiz çıktılarda sistem çökmez; kural tabanlı sistem özeti (`ai_source: fallback`) devreye girer. |
-| **Çıktı kontrol mekanizmaları (Guardrails)** | Yapay zekânın iş kurallarıyla üretilen kararları değiştiremeyeceğinin garanti edilmesi. | [`app/api/routes.py`](app/api/routes.py) & [`tests/test_decision_engine.py`](tests/test_decision_engine.py)<br>• **Pipeline Isolation:** Karar API çıktısına doğrudan kural motorundan atanır.<br>• **Pydantic Contract:** `AISummaryOutput` şemasında karar alanı bulunmaz.<br>• **Logic Guardrail:** APPROVE ve REJECT kararlarında taslak mesaj kod seviyesinde `None` yapılarak sıfırlanır. |
+To mathematically guarantee that AI outputs cannot manipulate or override deterministic business decisions, a 4-tier defense architecture is implemented:
 
-### 4 Katmanlı Guardrail Savunma Hattı
-
-Yapay zekânın deterministik iş kurallarını manipüle edememesi ve karar sınırlarını aşamaması için 4 aşamalı bir savunma hattı kurulmuştur:
-
-1. **Mimari Karar İzolasyonu (Pipeline Isolation - Single Source of Truth):**  
-   Nihai karar (`APPROVE`, `REJECT`, `NEED_APPROVAL`) ve gerekçe kodları (`reason_codes`), yapay zekâ ajanı çağrılmadan **önce** kural motoru tarafından üretilir. [`app/api/routes.py`](app/api/routes.py) içindeki `evaluate_offer` fonksiyonunda API çıktısı oluşturulurken `decision=decision_result["decision"]` atanır. Yapay zekâ modelinin çıktısı bu alana teknik olarak bağlanmamıştır.
-2. **Sözleşme Düzeyinde Kontrol (Pydantic Contract Guardrail):**  
-   Ajanın çıktısı [`AISummaryOutput`](app/ai/offer_agent.py) modeli ile doğrulanır:
+1. **Architectural Pipeline Isolation (Single Source of Truth):**  
+   The final verdict (`APPROVE`, `REJECT`, `NEED_APPROVAL`) and `reason_codes` are produced **before** invoking the AI layer. In [`app/api/routes.py`](app/api/routes.py), the API response binds directly to `decision=decision_result["decision"]`.
+2. **Pydantic Contract Enforcement:**  
+   Agent responses are strictly validated by [`AISummaryOutput`](app/ai/offer_agent.py):
    ```python
    class AISummaryOutput(BaseModel):
        ai_summary: str
        approval_message_draft: Optional[str] = None
    ```
-   Bu modelde `decision` veya `reason_codes` alanı bulunmadığından model karar manipülasyonu yapabilecek bir veri üretemez.
-3. **Mantıksal Güvenlik Duvarı (Logic Guardrail - Draft Nulling):**  
-   Yapay zekâ halüsinasyon sonucu onaylanmış (`APPROVE`) veya reddedilmiş (`REJECT`) bir teklif için onay taslağı üretse dahi, Python kodu bunu anında ezerek sıfırlar:
+   Because `decision` and `reason_codes` fields do not exist in the schema, the model is structurally incapable of tampering with decision data.
+3. **Logic Guardrail (Draft Scrubbing):**  
+   Approval request drafts are only permissible for `NEED_APPROVAL` verdicts. If an LLM hallucinates an approval draft for an approved or rejected offer, the application immediately nullifies it:
    ```python
-   # Guardrail: Yalnızca NEED_APPROVAL durumunda taslak mesaj üretilebilir
    if decision != "NEED_APPROVAL":
        result["approval_message_draft"] = None
    ```
-4. **Kesintisiz Hizmet ve Hata Dayanıklılığı (Fallback):**  
-   Groq API kesintisi, hız sınırı (429) veya geçersiz JSON çıktısı durumunda uygulama `HTTP 500` hatası vermez; `_fallback_summary` devreye girerek kural motorunun çıktılarını içeren deterministik bir sistem özeti döner (`ai_source: fallback`).
+4. **Resilience & Fault Fallback:**  
+   In the event of API timeouts, token limits (429), or invalid JSON, the application never raises an HTTP 500. Instead, `_fallback_summary` provides a deterministic rule-based summary (`ai_source: fallback`).
 
-> **Otomatik Test Güvencesi:** Bu guardrail mekanizması [`tests/test_decision_engine.py`](tests/test_decision_engine.py) altındaki `test_guardrail_ai_cannot_override_decision` testi ile her çalıştırmada otomatik olarak doğrulanmaktadır.
-
-### Çift Modlu Çalışma Ayrımı:
-- **API Anahtarı Gerektirmeyen Mock Modu (`LLM_MODE=mock`):** LangChain Tool arayüzleri deterministik olarak doğrudan çağrılarak ajan veri akışı yerel olarak test edilir; harici internet bağımlılığı yoktur.
-- **Canlı LLM Modu (`LLM_MODE=groq`):** LangChain'in `create_tool_calling_agent` mekanizması ile LLM otonom araç çağırma zincirini işletir.
+> **Automated Verification:** This defense line is tested on every CI execution via `test_guardrail_ai_cannot_override_decision` in [`tests/test_decision_engine.py`](tests/test_decision_engine.py).
 
 ---
 
-## 7. Kişisel Verilerin Korunması ve Veri Minimizasyonu
+## 7. Data Privacy & Zero-PII Compliance
 
-Penta Teknoloji iş ortaklarının ticari ve kişisel verilerinin korunması amacıyla **Tasarımda Gizlilik** ve **Veri Minimizasyonu** ilkeleri benimsenmiştir:
+To ensure complete compliance with GDPR, CCPA, and enterprise confidentiality requirements:
 
-1. **Veri Minimizasyonu (Data Minimization):** Müşteri kişisel verileri maskelenmeden de önce, mimari düzeyde dış LLM'e iletilen `AgentContext` nesnesine ve `audit.log` payload'ına **fiziksel olarak hiç dahil edilmez**.
-2. **Araç Yanıtlarında Maskeleme:** Ajan CRM aracını (`get_crm_offer_details`) çağırdığında, CRM istemcisi müşteri adını `pii.mask_name` fonksiyonundan geçirerek maskeler (`A** T********`).
-3. **Denetim İzolasyonu:** `project/logs/audit.log` dosyasında müşteri adı, e-posta veya telefon yer almaz; yalnızca `request_id`, `offer_id` ve teknik değerlendirme metrikleri saklanır.
+1. **Context Data Minimization:** Customer names, emails, and phone numbers are **never passed** to the LLM agent context (`AgentContext`) or audit log payloads.
+2. **Tool Masking:** When the CRM tool is called, customer account identities are scrubbed via `pii.mask_name` (e.g., `Acme Technology` -> `A*** T*********`).
+3. **Isolated Audit Logs:** `project/logs/audit.log` stores only correlation UUIDs (`request_id`), timestamps, and technical evaluation metrics.
 
-*Yapay Zekâ ve Gizlilik yaklaşımının detayları için bknz: [`AI_EVALUATION_NOTE.md`](AI_EVALUATION_NOTE.md)*  
-*Örnek log formatı ve izlenebilirlik kayıtları için bknz: [`AUDIT_LOGS.md`](AUDIT_LOGS.md)*
+*See [`AI_EVALUATION_NOTE.md`](AI_EVALUATION_NOTE.md) and [`AUDIT_LOGS.md`](AUDIT_LOGS.md) for full compliance breakdowns.*
 
 ---
 
-## 8. Hızlı Test: Örnek cURL Çağrısı
+## 8. Sample cURL Request & Response
 
-Onay gerektiren düşük marj ve yüksek tutarlı bir teklifin hızlı testi:
+Testing a deal that requires managerial review (low margin + high value):
 
 ```bash
 curl -X POST "http://localhost:8000/evaluate-offer" \
   -H "Content-Type: application/json" \
   -d '{
     "offer_id": "OFF-10023",
-    "customer": {"name": "ABC Teknoloji", "email": "buyer@example.com"},
+    "customer": {"name": "Acme Technology", "email": "buyer@example.com"},
     "product_id": "PRD-445",
     "quantity": 8,
     "requested_discount": 12,
@@ -232,7 +217,7 @@ curl -X POST "http://localhost:8000/evaluate-offer" \
   }'
 ```
 
-**Dönen Yanıt (HTTP 200 OK):**
+**Response (HTTP 200 OK):**
 ```json
 {
   "request_id": "0fba2488-ed3f-4106-8a26-2644b1a584c9",
@@ -242,35 +227,35 @@ curl -X POST "http://localhost:8000/evaluate-offer" \
     "LOW_MARGIN",
     "HIGH_VALUE_OFFER"
   ],
-  "ai_summary": "Stratejik partner A** T********'a ait 125.000 TL tutarındaki teklif, %12 indirimle net marjı %9,09'a düşürdüğü ve yüksek tutarlı olması nedeniyle onaya sevk edildi. Stok durumu (50 adet) uygun görünüyor.",
+  "ai_summary": "For offer OFF-10023, partner segment 'strategic_partner' was verified via CRM. ERP records indicate available stock of 50 units with a projected net margin of 9.09%. Managerial approval is required due to triggered policy rules (LOW_MARGIN, HIGH_VALUE_OFFER).",
   "approval_required": true,
-  "approval_message_draft": "Sayın Yöneticim, OFF-10023 numaralı teklif (müşteri: A** T********, segment: stratejik partner) %12 indirim talebiyle net marjı %9,09'a çekmekte olup 125.000 TL tutarıyla yüksek limit eşiğini aşmaktadır. Stok yeterlidir (50 adet). Stratejik ilişki gözetilerek onayınızı rica ederim.",
+  "approval_message_draft": "Offer OFF-10023 for A*** T********* submitted for manager review due to: LOW_MARGIN, HIGH_VALUE_OFFER.",
   "pii_masked": true
 }
 ```
 
-> **Tüm Senaryolar:** Normal teklif (APPROVE), yetersiz stok (REJECT) ve HTTP 422 doğrulama hatalarına ait detaylı cURL komutları ve Mock/Groq yanıtları için bakınız: **[`CURL_SAMPLES.md`](CURL_SAMPLES.md)**
+*For complete test scenarios (APPROVE, REJECT, HTTP 422), see: **[`CURL_SAMPLES.md`](CURL_SAMPLES.md)***
 
 ---
 
-## 9. Birim Testler
+## 9. Automated Test Suite
 
-Test paketi, şartnamede yer alan tüm senaryoları ve guardrail mekanizmalarını otomatik doğrular:
-- PII maskeleme fonksiyonları (`mask_name`, `mask_email`, `mask_phone`)
-- Deterministik karar motoru iş kuralları (10 kural durumu)
-- **Guardrail Güvencesi:** Yapay zekânın kural motoru kararını asla değiştiremeyeceğinin testi (`test_guardrail_ai_cannot_override_decision`)
-- APPROVE / REJECT kararlarında onay taslağı sıfırlama (Draft nulling)
-- Mock modda araç çağırma ve fallback dayanıklılık testleri
-- FastAPI entegrasyonu ve Pydantic 422 sınır denetimleri
+The test suite provides comprehensive coverage for all business rules, edge cases, and security guardrails:
+- PII masking functions (`mask_name`, `mask_email`, `mask_phone`, `mask_offer_data`)
+- Deterministic Decision Engine logic (10 distinct policy scenarios)
+- **Guardrail Verification:** Guaranteeing that rogue AI responses cannot override engine verdicts
+- Draft message nullification on APPROVE and REJECT verdicts
+- Tool calling execution and fallback error resilience in Mock mode
+- FastAPI integration and Pydantic HTTP 422 boundary validations
 
-### Testleri Çalıştırma:
+### Executing the Test Suite:
 ```bash
 python -m unittest tests/test_decision_engine.py
 ```
 
-**Test Çıktısı:**
+**Output:**
 ```
-Ran 28 tests in 0.028s
+Ran 28 tests in 0.032s
 
 OK
 ```

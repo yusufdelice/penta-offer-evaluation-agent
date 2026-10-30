@@ -2,9 +2,8 @@ import logging
 import json
 from datetime import datetime, timezone
 from typing import Optional
-
-
 from pathlib import Path
+
 
 def setup_logger(name: str = "offer_agent") -> logging.Logger:
     logger = logging.getLogger(name)
@@ -17,13 +16,13 @@ def setup_logger(name: str = "offer_agent") -> logging.Logger:
         datefmt="%Y-%m-%d %H:%M:%S"
     )
 
-    # 1. Terminal / Konsol çıktısı
+    # 1. Console / Standard Output
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
 
-    # 2. Kalıcı dosya çıktısı (project/logs/audit.log)
+    # 2. Persistent Audit File Output (project/logs/audit.log)
     try:
         log_dir = Path(__file__).resolve().parent.parent.parent / "logs"
         log_dir.mkdir(exist_ok=True)
@@ -42,8 +41,8 @@ logger = setup_logger()
 
 def log_offer_evaluation(offer_data: dict, result: dict, request_id: str) -> None:
     """
-    Değerlendirme sonucunu sıfır PII (kişisel veri içermeyen) prensibiyle denetim günlüğüne yazar.
-    İşlem takibi request_id ve offer_id üzerinden yapılır.
+    Writes evaluation results to the audit log adhering to Zero PII principles.
+    Transaction correlation is maintained via request_id and offer_id.
     """
     audit_record = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -60,7 +59,7 @@ def log_offer_evaluation(offer_data: dict, result: dict, request_id: str) -> Non
 
 def log_error(offer_id: str, error_message: str, request_id: Optional[str] = None) -> None:
     """
-    Hata kayıtlarını işlem kimliğiyle denetim günlüğüne yazar.
+    Logs structured error events correlated with request and offer identifiers.
     """
     error_record = {
         "timestamp": datetime.now(timezone.utc).isoformat(),

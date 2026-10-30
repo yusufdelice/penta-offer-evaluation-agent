@@ -1,25 +1,27 @@
-# Penta Teknoloji — Mock Veri Dosyaları ve Mock Servis Yaklaşımı
+# Mock Data Sets & Mock Service Architecture
 
-> **Referans:** Case Study Şartnamesi (Bölüm 2) — *“Mock veri dosyaları veya mock servis yaklaşımının açıklaması”* teslimat çıktısı olarak hazırlanmıştır.
-
----
-
-## 1. Mimari Yaklaşım ve Konumlandırma
-
-Kurumsal teknoloji dağıtıcısı mimarisinde teklifler CRM ve ERP sistemleriyle çapraz doğrulanır. Bu prototipte SAP ve Salesforce gibi kurumsal sistemler simüle edilirken, kod içerisine statik Python sözlükleri gömmek (`mock_db = {...}`) yerine; bağımsız, temiz ve gerçekçi **harici JSON veri dosyaları** (`data/`) ve bu dosyaları dış dünyadan soyutlayan **Servis / Adaptör Deseni (Service & Adapter Pattern)** kullanılmıştır.
+> **Architecture Reference:** Technical Specification — *“Specification of mock data structures and service adapter patterns simulating enterprise systems.”*
 
 ---
 
-## 2. Mock Veri Dosyalarının Yapısı (`data/`)
+## 1. Architectural Strategy & Context
 
-### A. `data/offers.json` (Mock CRM Teklif Veritabanı)
-Sistemde kayıtlı ve geçerli teklifleri temsil eder:
+In enterprise value-added technology distribution architectures, quotation offers are evaluated against real-time data from Enterprise Resource Planning (ERP) and Customer Relationship Management (CRM) backends. 
+
+Rather than embedding static dictionary lookups (`mock_db = {...}`) directly into business logic, this prototype strictly implements the **Service & Adapter Pattern** decoupling clean, schema-driven **external JSON datasets** (`data/`) from domain evaluation rules. This mirrors enterprise multi-tier decoupling and ensures seamless production migration to systems like SAP and Salesforce without altering business logic.
+
+---
+
+## 2. Mock Dataset Schemas (`data/`)
+
+### A. `data/offers.json` (CRM Master Offer Database)
+Represents verified registered deal registrations and partner segment profiles:
 ```json
 [
   {
     "offer_id": "OFF-10023",
     "customer": {
-      "name": "ABC Teknoloji",
+      "name": "Acme Technology",
       "segment": "strategic_partner"
     },
     "product_id": "PRD-445",
@@ -30,7 +32,7 @@ Sistemde kayıtlı ve geçerli teklifleri temsil eder:
   {
     "offer_id": "OFF-20001",
     "customer": {
-      "name": "Yeni Müşteri A.Ş.",
+      "name": "Nova Systems Inc",
       "segment": "standard"
     },
     "product_id": "PRD-101",
@@ -41,8 +43,8 @@ Sistemde kayıtlı ve geçerli teklifleri temsil eder:
 ]
 ```
 
-### B. `data/stock.json` (Mock ERP Depo ve Stok Envanteri)
-Ürünlerin güncel depo fiziki stok adetlerini tutar:
+### B. `data/stock.json` (ERP Warehouse Inventory)
+Tracks real-time physical inventory quantities across SKU lines:
 ```json
 {
   "PRD-445": { "stock_quantity": 50 },
@@ -51,8 +53,8 @@ Sistemde kayıtlı ve geçerli teklifleri temsil eder:
 }
 ```
 
-### C. `data/prices.json` (Mock ERP Maliyet ve Taban Liste Fiyatları)
-Ürünlerin liste satış fiyatı (`base_price`) ve satın alma maliyetini (`cost_price`) tutar:
+### C. `data/prices.json` (ERP Pricing & Cost Catalog)
+Contains standard base catalog prices (`base_price`) and procurement cost bases (`cost_price`):
 ```json
 {
   "PRD-445": { "base_price": 17755.68, "cost_price": 14200.0 },
@@ -63,38 +65,38 @@ Sistemde kayıtlı ve geçerli teklifleri temsil eder:
 
 ---
 
-## 3. Mock Servis Deseni (Service & Adapter Pattern)
+## 3. Service & Adapter Pattern
 
-Veri dosyaları doğrudan karar motorunun içine gömülmez; bağımsız istemci servisleri üzerinden soyutlanır:
+Data sources are accessed exclusively through specialized client adapters:
 
 ### 1. `CRMClient` (`app/services/crm_client.py`)
-- `data/offers.json` dosyasını diskten okuyup `offer_id` anahtarıyla bellekte indeksler.
-- `get_offer(offer_id)` metodu ile teklifin varlığını ve müşteri segmentini döner. Kayıt yoksa `None` döner.
-- `customer` nesnesi üzerinden müşteri unvanı ve segment doğrulamasını sağlar.
+- Reads `data/offers.json` from disk and indexes records in memory keyed by `offer_id`.
+- The `get_offer(offer_id)` method verifies offer existence and resolves partner customer tiering (`segment`). Returns `None` if the offer ID is unregistered.
+- Provides customer account identity for subsequent privacy-scrubbed processing.
 
 ### 2. `ERPClient` (`app/services/erp_client.py`)
-- `data/stock.json` ve `data/prices.json` dosyalarını dinamik okur.
-- `get_product_data(product_id, requested_discount)` metodu ile bayinin talep ettiği indirimi taban fiyata uygulayarak **net kar marjını** matematiksel olarak hesaplar:
+- Reads inventory (`data/stock.json`) and pricing (`data/prices.json`) dynamically.
+- The `get_product_data(product_id, requested_discount)` method applies requested partner discounts to base prices and computes the **net profit margin** deterministically:
   ```text
-  İndirimli Fiyat = Taban Liste Fiyatı * (1 - (Talep Edilen İndirim / 100))
-  Net Kar Marjı (%) = ((İndirimli Fiyat - Satın Alma Maliyeti) / İndirimli Fiyat) * 100
+  Discounted Unit Price = Base Price * (1 - (Requested Discount / 100))
+  Net Profit Margin (%) = ((Discounted Unit Price - Procurement Cost) / Discounted Unit Price) * 100
   ```
-- Ürün ERP'de yoksa `{"exists": False}` döner.
+- Returns `{"exists": False}` if the requested product SKU is missing from the catalog.
 
 ---
 
-## 4. Entegrasyon Güvenliği ve Hata Yönetimi
+## 4. Integration Fault Tolerance & Error Handling
 
-- Eğer veri dosyalarından biri fiziksel olarak silinirse veya erişilemezse, istemciler kontrollü bir `FileNotFoundError` fırlatır.
-- API katmanı (`app/api/routes.py`) bu hatayı yakalayarak istemciye genel bir `500` hatası yerine, entegrasyon kopukluğunu net belirten `HTTP 502 Bad Gateway` ("Kurumsal sistem entegrasyon veri dosyası bulunamadı") yanıtı döner.
-- Bu durum denetim günlüğüne (`logs/audit.log`) ilgili `request_id` ile `OFFER_ERROR` etiketiyle işlenir.
+- **Resilience to Storage Faults:** If any mock data file is deleted or inaccessible, the client raises a controlled `FileNotFoundError`.
+- **Proper Gateway Error Status:** The API orchestration layer (`app/api/routes.py`) catches this exception and returns an informative `HTTP 502 Bad Gateway` ("Enterprise system integration data file not found") rather than an ambiguous `HTTP 500`.
+- **Traceability:** Integration failures are automatically logged to `logs/audit.log` under the `OFFER_ERROR` event tag correlated with the incoming `request_id`.
 
 ---
 
-## 5. Canlı Kurumsal Sistemlere Geçiş (Enterprise Transition)
+## 5. Enterprise Production Transition Roadmap
 
-Prototipte uygulanan servis deseni sayesinde sistem canlıya alınırken:
-- `DecisionEngine` ve API katmanında hiçbir kod değişikliği gerekmez.
-- `CRMClient` içerisindeki JSON dosya okuma mantığı Salesforce REST / Dynamics OData API istemcisiyle değiştirilir.
-- `ERPClient` içerisindeki JSON dosya okuma mantığı SAP RFC / BAPI veya REST servisleriyle değiştirilir.
-- Yüksek çağrı hacminde ERP yükünü azaltmak amacıyla istemcilerin önüne 5-10 dakikalık bir Redis önbellekleme (caching) katmanı konumlandırılabilir.
+Thanks to the adapter design, migrating from prototype to live enterprise infrastructure requires zero modification to core decision logic:
+- The `DecisionEngine` and FastAPI endpoints remain completely untouched.
+- `CRMClient` JSON loading is replaced with an enterprise REST/OData client connecting to Salesforce, Microsoft Dynamics 365, or HubSpot.
+- `ERPClient` file lookups are substituted with SAP RFC/BAPI connectors, Oracle NetSuite REST services, or enterprise message brokers (Kafka/RabbitMQ).
+- An in-memory distributed cache (e.g., Redis) with a 5-10 minute TTL can be placed in front of ERP endpoints to shield legacy systems during high quote volumes.

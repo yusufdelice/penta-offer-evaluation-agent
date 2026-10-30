@@ -8,9 +8,9 @@ PRICES_FILE = Path(__file__).resolve().parent.parent.parent / "data" / "prices.j
 
 class ERPClient:
     """
-    ERP İstemcisi.
-    Stok ve fiyat verilerini 'data/stock.json' ve 'data/prices.json' dosyalarından
-    okuyarak in-memory hafızasında tutar ve marj hesaplaması yapar.
+    ERP Client adapter.
+    Reads inventory and pricing records from 'data/stock.json' and 'data/prices.json'
+    and calculates net margin based on requested discounts.
     """
 
     def __init__(self, stock_path: Path = STOCK_FILE, prices_path: Path = PRICES_FILE):
@@ -21,12 +21,12 @@ class ERPClient:
         self.load_data()
 
     def load_data(self) -> None:
-        """stock.json ve prices.json dosyalarını yükler."""
+        """Loads stock.json and prices.json files."""
         if not self.stock_path.exists():
-            raise FileNotFoundError(f"ERP stok veri dosyası bulunamadı: {self.stock_path}")
+            raise FileNotFoundError(f"ERP stock data file not found: {self.stock_path}")
 
         if not self.prices_path.exists():
-            raise FileNotFoundError(f"ERP fiyat veri dosyası bulunamadı: {self.prices_path}")
+            raise FileNotFoundError(f"ERP price data file not found: {self.prices_path}")
 
         with open(self.stock_path, "r", encoding="utf-8") as f:
             self.stocks = json.load(f)
@@ -36,8 +36,8 @@ class ERPClient:
 
     def get_product_data(self, product_id: str, requested_discount: float = 0.0) -> Dict[str, Any]:
         """
-        Ürünün stok miktarını ve talep edilen indirime göre kar marjını döner.
-        Ürün bulunamazsa {'exists': False} döner.
+        Returns stock quantity and net profit margin for a product based on requested discount.
+        Returns {'exists': False} if the product does not exist.
         """
         stock_info = self.stocks.get(product_id)
         price_info = self.prices.get(product_id)

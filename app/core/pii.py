@@ -4,8 +4,8 @@ from typing import Optional
 
 def mask_email(email: Optional[str]) -> str:
     """
-    E-posta adresini maskeler (örn: 'buyer@pentateknoloji.com' -> 'b***@p************i.com').
-    Kurumsal domainler ticari ünvan içerebileceği için domain adı da maskelenir.
+    Masks an email address (e.g., 'buyer@enterprisetech.com' -> 'b***@e*************h.com').
+    Corporate domain names may contain commercial identities, so the domain is masked as well.
     """
     if not email or "@" not in email:
         return "***"
@@ -39,7 +39,7 @@ def mask_email(email: Optional[str]) -> str:
 
 def mask_name(name: Optional[str]) -> str:
     """
-    Ad soyad bilgisini maskeler (örn: 'ABC Teknoloji' -> 'A** T********').
+    Masks full personal or partner names (e.g., 'Acme Technology' -> 'A*** T*********').
     """
     if not name:
         return "*"
@@ -58,7 +58,7 @@ def mask_name(name: Optional[str]) -> str:
 
 def mask_phone(phone: Optional[str]) -> str:
     """
-    Telefon numarasını son 4 hane hariç maskeler (örn: '+905551234567' -> '+********4567').
+    Masks phone numbers keeping only the last 4 digits (e.g., '+15551234567' -> '+*******4567').
     """
     if not phone:
         return "****"
@@ -79,8 +79,8 @@ def mask_phone(phone: Optional[str]) -> str:
 
 def mask_offer_data(offer_data: dict) -> dict:
     """
-    Teklif sözlüğünün kopyasını alarak müşteri PII alanlarını maskeler.
-    Orijinal veri nesnesini değişikliğe uğratmaz.
+    Returns a copy of the offer payload with all customer PII scrubbed/masked.
+    Does not mutate the original data dictionary.
     """
     masked = offer_data.copy()
 

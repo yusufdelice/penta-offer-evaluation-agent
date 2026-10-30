@@ -16,9 +16,9 @@ APPROVAL_REASONS = {
 
 class DecisionEngine:
     """
-    Kural tabanlı deterministik karar motoru.
-    Tüm geçerli gerekçe kodlarını bağımsız toplar ve ciddiyet sırasına (REJECT > NEED_APPROVAL > APPROVE)
-    göre nihai kararı belirler.
+    Rule-based deterministic decision engine.
+    Independently evaluates all applicable business rule reason codes and resolves
+    the final decision based on severity priority (REJECT > NEED_APPROVAL > APPROVE).
     """
 
     def __init__(self):
@@ -28,7 +28,7 @@ class DecisionEngine:
     def evaluate(self, offer_data: Dict[str, Any]) -> Dict[str, Any]:
         reason_codes: List[str] = []
 
-        # 1. CRM teklif ve müşteri doğrulaması
+        # 1. CRM offer and customer verification
         offer_id = offer_data.get("offer_id", "")
         crm_offer = self.crm.get_offer(offer_id)
 
@@ -39,12 +39,12 @@ class DecisionEngine:
             crm_customer = crm_offer.get("customer", {})
             customer_segment = crm_customer.get("segment", "standard")
 
-            # Veri bütünlüğü kontrolü: İstekteki segment CRM ile uyuşuyor mu?
+            # Data integrity verification: Does incoming segment match CRM master record?
             request_segment = offer_data.get("customer_segment")
             if request_segment and request_segment != customer_segment:
                 reason_codes.append("SEGMENT_MISMATCH")
 
-        # 2. ERP ürün ve stok kontrolleri
+        # 2. ERP product, inventory, and margin verification
         product_data = self.erp.get_product_data(
             offer_data["product_id"],
             offer_data["requested_discount"]
@@ -58,7 +58,7 @@ class DecisionEngine:
             stock = product_data["stock_quantity"]
             margin = product_data["margin_percentage"]
 
-            # Stok kontrolleri
+            # Stock availability checks
             if stock <= 0:
                 reason_codes.append("OUT_OF_STOCK")
             elif stock < offer_data["quantity"]:
@@ -68,21 +68,21 @@ class DecisionEngine:
                 else:
                     reason_codes.append("INSUFFICIENT_STOCK")
 
-            # Kritik marj kontrolü
+            # Critical margin threshold check
             if margin < settings.CRITICAL_MARGIN_THRESHOLD:
                 reason_codes.append("LOW_MARGIN")
 
-        # 3. Finansal ve ticari kurallar
-        # Yüksek tutarlı teklif kontrolü
+        # 3. Commercial and financial rules
+        # High value offer check
         if offer_data.get("offer_total", 0.0) > settings.HIGH_VALUE_THRESHOLD:
             reason_codes.append("HIGH_VALUE_OFFER")
 
-        # Stratejik ortak yüksek indirim kontrolü
+        # Strategic partner high discount check
         if (customer_segment == "strategic_partner"
                 and offer_data.get("requested_discount", 0.0) > settings.HIGH_DISCOUNT_THRESHOLD):
             reason_codes.append("STRATEGIC_HIGH_DISCOUNT")
 
-        # 4. Ciddiyet tabanlı (severity) nihai karar türetimi
+        # 4. Severity-based final decision resolution
         if any(code in REJECT_REASONS for code in reason_codes):
             decision = "REJECT"
         elif any(code in APPROVAL_REASONS for code in reason_codes):

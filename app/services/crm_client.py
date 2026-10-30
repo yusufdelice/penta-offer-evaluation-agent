@@ -7,9 +7,9 @@ DATA_FILE = Path(__file__).resolve().parent.parent.parent / "data" / "offers.jso
 
 class CRMClient:
     """
-    CRM İstemcisi.
-    Teklif ve müşteri kayıtlarını 'data/offers.json' dosyasından okuyarak
-    in-memory hafızasında tutar.
+    CRM Client adapter.
+    Reads offer and customer master records from 'data/offers.json'
+    and indexes them in memory.
     """
 
     def __init__(self, data_path: Path = DATA_FILE):
@@ -18,9 +18,9 @@ class CRMClient:
         self.load_data()
 
     def load_data(self) -> None:
-        """offers.json dosyasını yükler ve offer_id anahtarıyla indeksler."""
+        """Loads offers.json and indexes records by offer_id."""
         if not self.data_path.exists():
-            raise FileNotFoundError(f"CRM veri dosyası bulunamadı: {self.data_path}")
+            raise FileNotFoundError(f"CRM data file not found: {self.data_path}")
 
         with open(self.data_path, "r", encoding="utf-8") as f:
             offers_list = json.load(f)
@@ -28,5 +28,5 @@ class CRMClient:
         self.offers = {item["offer_id"]: item for item in offers_list}
 
     def get_offer(self, offer_id: str) -> Optional[Dict[str, Any]]:
-        """Verilen offer_id'ye ait teklifi döner, kayıt yoksa None döner."""
+        """Returns the offer associated with the given offer_id, or None if not found."""
         return self.offers.get(offer_id)

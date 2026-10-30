@@ -2,7 +2,7 @@
   {
     "offer_id": "OFF-10023",
     "customer": {
-      "name": "ABC Teknoloji",
+      "name": "Acme Technology",
       "segment": "strategic_partner"
     },
     "product_id": "PRD-445",
@@ -13,7 +13,7 @@
   {
     "offer_id": "OFF-20001",
     "customer": {
-      "name": "Yeni Müşteri A.Ş.",
+      "name": "Nova Systems Inc",
       "segment": "standard"
     },
     "product_id": "PRD-101",

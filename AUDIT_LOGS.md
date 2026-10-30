@@ -1,32 +1,32 @@
-# Penta Teknoloji — Kişisel Veri İçermeyen Denetim Kayıtları (Audit Logs)
+# Privacy-Preserving Enterprise Audit Logging (Zero-PII)
 
-> **Referans:** Case Study Şartnamesi (Bölüm 2) — *“Kişisel veri içermeyen örnek işlem kayıtları (log/audit kayıtları)”* teslimat çıktısı olarak hazırlanmıştır.
-
----
-
-## 1. Denetim Günlüğü Mimarisi ve Veri Minimizasyonu
-
-Kurumsal bilgi sistemlerinde log dosyaları diskte uzun süre saklanır, merkezi SIEM (Splunk, Datadog vb.) platformlarına aktarılır ve sistem yöneticileri dahil birçok teknik personel tarafından taranır. KVKK / GDPR ve kurumsal gizlilik politikaları gereğince loglara kişisel veri (PII) veya ticari sır yazılması ciddi bir uyumluluk ihlali doğurur.
-
-Bu sistemde **Veri Minimizasyonu (Data Minimization)** ve **İzlenebilirlik (Traceability)** ilkeleri şu şekilde hayata geçirilmiştir:
-
-1. **Sıfır PII Girişi:** Denetim günlüğüne müşteri adı, yetkili adı, e-posta adresi veya telefon numarası **kesinlikle dahil edilmez**.
-2. **Korelasyon Kimliği (`request_id`):** Her HTTP isteği için API seviyesinde üretilen tekil UUID, hem istemciye dönen yanıtta hem de arka plandaki tüm log kayıtlarında (`OFFER_EVALUATED` ve `OFFER_ERROR`) ortak korelasyon anahtarı olarak kullanılır.
-3. **Çift Kanallı Loglama:** Loglar hem terminal konsoluna (`StreamHandler`) hem de kalıcı diske (`project/logs/audit.log`) yazılır.
-
-* **Format:** `YYYY-MM-DD HH:MM:SS | LOG_LEVEL | LOG_TAG | JSON_PAYLOAD`
+> **Architecture Reference:** Technical Specification — *“Production audit logging architecture with strict Zero-PII compliance and end-to-end transaction traceability.”*
 
 ---
 
-## 2. Başarılı Teklif Değerlendirme Kaydı (`OFFER_EVALUATED`)
+## 1. Audit Logging Architecture & Data Minimization
 
-Başarılı bir ön değerlendirme sonucunda diske yazılan gerçek log kaydı:
+In enterprise environments, system log files are persisted across disk storage, aggregated into centralized SIEM platforms (e.g., Datadog, Splunk, Elastic, AWS CloudWatch), and monitored by operations personnel. Under GDPR, CCPA, and enterprise privacy standards, leaking Personally Identifiable Information (PII) or commercial deal secrets into log streams constitutes a critical compliance violation.
+
+This platform enforces **Data Minimization** and **Full Traceability** through the following principles:
+
+1. **Zero-PII Ingestion:** Customer personal details, contact names, email addresses, and phone numbers are **never written** to audit logs.
+2. **Correlation ID (`request_id`):** Every inbound HTTP request receives a cryptographically unique UUID at the API gateway layer. This identifier serves as the single correlation key across client responses, decision events (`OFFER_EVALUATED`), and error occurrences (`OFFER_ERROR`).
+3. **Dual-Channel Dispatch:** Logs are synchronously streamed to `stdout` (`StreamHandler`) for containerized orchestration (Docker/Kubernetes) and appended to a persistent audit trail (`project/logs/audit.log`).
+
+* **Record Format:** `YYYY-MM-DD HH:MM:SS | LOG_LEVEL | LOG_TAG | JSON_PAYLOAD`
+
+---
+
+## 2. Successful Quotation Evaluation Entry (`OFFER_EVALUATED`)
+
+Real-world audit log record emitted upon successful rule evaluation:
 
 ```text
 2026-09-22 17:37:32 | INFO | OFFER_EVALUATED | {"timestamp": "2026-09-22T14:37:32.060201+00:00", "request_id": "ef1217d2-f7db-439e-ab7e-c871728686d9", "offer_id": "OFF-20001", "product_id": "PRD-101", "decision": "APPROVE", "reason_codes": ["ALL_CRITERIA_MET"], "details": {"customer_segment": "standard", "stock": 250, "margin": 29.82}}
 ```
 
-**Yapısal JSON Açılımı:**
+**Parsed Structural JSON:**
 ```json
 {
   "timestamp": "2026-09-22T14:37:32.060201+00:00",
@@ -45,19 +45,19 @@ Başarılı bir ön değerlendirme sonucunda diske yazılan gerçek log kaydı:
 }
 ```
 
-*Görüldüğü üzere müşterinin ismi (`Yeni Müşteri A.Ş.`), e-postası veya telefonu kayıtta bulunmaz; yalnızca değerlendirme metrikleri ve sonuç yer alır.*
+*Note: Raw customer names (e.g., "Nova Systems Inc"), buyer emails, and direct phone lines are excluded. Only non-PII technical metrics, segment tags, and decision codes are retained.*
 
 ---
 
-## 3. Sistem ve Hata Kayıtları (`OFFER_ERROR`)
+## 3. System & Fault Logging (`OFFER_ERROR`)
 
-Dış LLM API kesintisi, hız sınırı (429), zaman aşımı veya entegrasyon arızalarında üretilen denetim kaydı:
+Emitted during external LLM outages, rate limits (HTTP 429), gateway timeouts, or integration disconnections:
 
 ```text
 2026-09-22 17:37:32 | ERROR | OFFER_ERROR | {"timestamp": "2026-09-22T14:37:32.046188+00:00", "request_id": "c0a6ce15-37c7-418d-8e2a-477a829948ff", "offer_id": "OFF-10023", "error": "AI Agent Error: Groq API Timeout"}
 ```
 
-**Yapısal JSON Açılımı:**
+**Parsed Structural JSON:**
 ```json
 {
   "timestamp": "2026-09-22T14:37:32.046188+00:00",
@@ -69,10 +69,10 @@ Dış LLM API kesintisi, hız sınırı (429), zaman aşımı veya entegrasyon a
 
 ---
 
-## 4. Uçtan Uca İzlenebilirlik Zinciri (End-to-End Traceability)
+## 4. End-to-End Operational Traceability
 
-Olası bir müşteri itirazında veya iç denetim incelemesinde süreç şöyle işletilir:
-1. Bayi / Yönetici ekranındaki `request_id` (örn: `c0a6ce15-...`) alınır.
-2. `project/logs/audit.log` dosyasında veya SIEM üzerinde bu kimlik sorgulanır.
-3. Hangi tarihte, hangi teklif ID'sine karşılık hangi stok ve marj oranıyla karar verildiği veya hangi hatanın oluştuğu saniyeler içinde kanıtlanır.
-4. Bu süreç işletilirken hiçbir aşamada üçüncü taraf sistemlere veya log dosyalarına kişisel veri sızdırılmamış olur.
+In the event of a customer dispute or an internal audit inspection:
+1. The operations team retrieves the `request_id` (e.g., `c0a6ce15-...`) from the partner quote record or portal interface.
+2. The SIEM or `logs/audit.log` file is queried for this specific correlation key.
+3. The exact timestamp, evaluated SKU, inventory level, margin percentage, triggered policy rules, and resolved decision can be proven within seconds.
+4. Total compliance is guaranteed: no confidential personal contact details are stored in or exposed via the logging pipeline.
